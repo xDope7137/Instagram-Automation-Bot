@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import argparse
 from datetime import datetime
 from typing import Optional
 
@@ -101,6 +102,18 @@ class Config:
             required=False,
             is_config_file=True,
             help="config file path",
+        )
+        # Allow forcing app language from config or CLI
+        self.parser.add_argument(
+            "--app-language",
+            required=False,
+            help="Set the Instagram app language (e.g. 'en'). If set, the bot will skip automatic language checks.",
+        )
+        # Accept underscore variant to be tolerant with config keys
+        self.parser.add_argument(
+            "--app_language",
+            required=False,
+            help=argparse.SUPPRESS if 'argparse' in globals() else "Alias for --app-language",
         )
 
         # on first run, we must wait to proceed with loading

@@ -128,8 +128,8 @@ def download_from_github(
         else:
             print_text(e, "red", in_place=True)
         sys.exit()
-    except:
-        print_text("✘ Failed", "red", in_place=True)
+    except Exception as e:
+        print_text(f"✘ Failed: {e}", "red", in_place=True)
         sys.exit()
 
     # make a directory with the name which is taken from
@@ -192,8 +192,8 @@ def download_from_github(
                 else:
                     print_text(e, "red", in_place=True)
                 sys.exit()
-            except:
-                print_text("✘ Failed", "red", in_place=True)
+            except Exception as e:
+                print_text(f"✘ Failed: {e}", "red", in_place=True)
                 sys.exit()
 
         # going over the files in the directory
@@ -247,8 +247,8 @@ def download_from_github(
                     else:
                         print_text(e, "red", in_place=True)
                     sys.exit()
-                except:
-                    print_text("✘ Failed", "red", in_place=True)
+                except Exception as e:
+                    print_text(f"✘ Failed: {e}", "red", in_place=True)
                     sys.exit()
             else:
                 download_from_github(
