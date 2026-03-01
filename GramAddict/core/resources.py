@@ -29,6 +29,8 @@ class ResourceID:
             f"{APP_ID}:id/carousel_index_indicator_text_view"
         )
         self.CLIPS_VIDEO_CONTAINER = f"{APP_ID}:id/clips_video_container"
+        # clips/reels specific
+        self.CLIPS_AUTHOR_USERNAME = f"{APP_ID}:id/clips_author_username"
         self.COLLECTION_ROOT_VIEW = f"{APP_ID}:id/collection_root_view"
         self.COORDINATOR_ROOT_LAYOUT = f"{APP_ID}:id/coordinator_root_layout"
         self.DIALOG_ROOT_VIEW = f"{APP_ID}:id/dialog_root_view"
@@ -90,6 +92,21 @@ class ResourceID:
         self.PROFILE_HEADER_AVATAR_CONTAINER_TOP_LEFT_STUB = (
             f"{APP_ID}:id/profile_header_avatar_container_top_left_stub"
         )
+        # Newer Instagram UI resource ids (familiar/styled headers)
+        self.PROFILE_HEADER_CONTAINER = f"{APP_ID}:id/profile_header_container"
+        self.PROFILE_HEADER_FIXED_LIST = f"{APP_ID}:id/profile_header_fixed_list"
+        self.ROW_PROFILE_HEADER = f"{APP_ID}:id/row_profile_header"
+        self.PROFILE_HEADER_METRICS_FULL_WIDTH = f"{APP_ID}:id/profile_header_metrics_full_width"
+        self.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR = f"{APP_ID}:id/profile_header_post_count_front_familiar"
+        self.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE = f"{APP_ID}:id/profile_header_familiar_post_count_value"
+        self.PROFILE_HEADER_FAMILIAR_POST_COUNT_LABEL = f"{APP_ID}:id/profile_header_familiar_post_count_label"
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWERS_VALUE = f"{APP_ID}:id/profile_header_familiar_followers_value"
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWERS_LABEL = f"{APP_ID}:id/profile_header_familiar_followers_label"
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWING_VALUE = f"{APP_ID}:id/profile_header_familiar_following_value"
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWING_LABEL = f"{APP_ID}:id/profile_header_familiar_following_label"
+        # stacked container ids (used as fallback)
+        self.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR = f"{APP_ID}:id/profile_header_followers_stacked_familiar"
+        self.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR = f"{APP_ID}:id/profile_header_following_stacked_familiar"
         self.PROFILE_TAB_LAYOUT = f"{APP_ID}:id/profile_tab_layout"
         self.PROFILE_TAB_ICON_VIEW = f"{APP_ID}:id/profile_tab_icon_view"
         self.PROFILE_TABS_CONTAINER = f"{APP_ID}:id/profile_tabs_container"

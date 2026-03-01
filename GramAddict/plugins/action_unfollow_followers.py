@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from enum import Enum, unique
 
 from colorama import Fore
@@ -11,6 +12,7 @@ from GramAddict.core.resources import ResourceID as resources
 from GramAddict.core.scroll_end_detector import ScrollEndDetector
 from GramAddict.core.storage import FollowingStatus
 from GramAddict.core.utils import (
+    EmptyList,
     get_value,
     inspect_current_view,
     random_sleep,
@@ -94,6 +96,13 @@ class ActionUnfollowFollowers(Plugin):
                 "help": "unfollow users followed by the bot after x amount of days",
                 "metavar": "3",
                 "default": "0",
+            },
+            {
+                "arg": "--unfollow-skip-recent-days",
+                "nargs": None,
+                "help": "skip unfollow for users interacted with in the last N days (default: 7)",
+                "metavar": "7",
+                "default": "7",
             },
         ]
 
@@ -193,6 +202,7 @@ class ActionUnfollowFollowers(Plugin):
             skipped_list_limit=skipped_list_limit,
             skipped_fling_limit=skipped_fling_limit,
         )
+        storage.ensure_unfollow_skipped_recent_log_exists()
         ProfileView(device).navigateToFollowing()
         self.iterate_over_followings(
             device,
@@ -300,7 +310,14 @@ class ActionUnfollowFollowers(Plugin):
             user_list = device.find(
                 resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
             )
-            row_height, n_users = inspect_current_view(user_list)
+            try:
+                row_height, n_users = inspect_current_view(user_list)
+            except EmptyList:
+                logger.warning(
+                    "Following list appears empty (UI may not be ready). Waiting and retrying..."
+                )
+                random_sleep(2, 4, modulable=False)
+                continue
             for item in user_list:
                 cur_row_height = item.get_height()
                 if cur_row_height < row_height:
@@ -321,6 +338,29 @@ class ActionUnfollowFollowers(Plugin):
 
                     if storage.is_user_in_whitelist(username):
                         logger.info(f"@{username} is in whitelist. Skip.")
+                        continue
+
+                    _skip_days_raw = getattr(
+                        self.args, "unfollow_skip_recent_days", "7"
+                    )
+                    if isinstance(_skip_days_raw, int):
+                        skip_recent_days = _skip_days_raw
+                    else:
+                        skip_recent_days = get_value(
+                            str(_skip_days_raw) if _skip_days_raw is not None else "7",
+                            None,
+                            7,
+                        )
+                    if skip_recent_days is None:
+                        skip_recent_days = 7
+                    skipped_recent, last_interaction = storage.was_interacted_in_last_days(
+                        username, days=skip_recent_days
+                    )
+                    if skipped_recent:
+                        logger.info(
+                            f"Skip @{username} - interacted in past {skip_recent_days} days (last: {last_interaction})."
+                        )
+                        # Do not log here: we already logged when we first interacted (e.g. opened profile). Logging again would duplicate the same user on retries or next run.
                         continue
 
                     if unfollow_restriction in [
@@ -386,6 +426,9 @@ class ActionUnfollowFollowers(Plugin):
                                 UnfollowRestriction.ANY_FOLLOWERS,
                             ],
                             job_name == "unfollow-any-followers",
+                            storage=storage,
+                            session_id=self.session_state.id,
+                            job_name=job_name,
                         )
 
                     if unfollowed:
@@ -441,6 +484,9 @@ class ActionUnfollowFollowers(Plugin):
         my_username,
         check_if_is_follower,
         unfollow_followers=False,
+        storage=None,
+        session_id=None,
+        job_name=None,
     ):
         """
         :return: whether unfollow was successful
@@ -460,6 +506,16 @@ class ActionUnfollowFollowers(Plugin):
             if check_if_is_follower and is_following_you:
                 if not unfollow_followers:
                     logger.info(f"Skip @{username}. This user is following you.")
+                    if storage is not None and session_id is not None:
+                        storage.add_interacted_user(
+                            username,
+                            session_id,
+                            job_name=job_name,
+                            target=None,
+                        )
+                        storage.log_unfollow_skipped_recent_interaction(
+                            username, datetime.now()
+                        )
                     logger.info("Back to the followings list.")
                     device.back()
                     return False

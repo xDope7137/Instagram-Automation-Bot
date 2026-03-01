@@ -30,6 +30,7 @@ from GramAddict.core.log import get_log_file_config
 from GramAddict.core.report import print_full_report
 from GramAddict.core.resources import ResourceID as resources
 from GramAddict.core.storage import ACCOUNTS
+from GramAddict.core.debug import debug_logger
 
 http = urllib3.PoolManager()
 logger = logging.getLogger(__name__)
@@ -477,6 +478,14 @@ def save_crash(device):
     except OSError:
         logger.error(f"Directory {directory_name} already exists.")
         return
+    # Flush debug events and copy debug events file if present
+    try:
+        debug_logger.flush()
+        events_path = debug_logger.get_events_path()
+        if os.path.exists(events_path):
+            shutil.copy(events_path, os.path.join(crash_path, "debug_events.jsonl"))
+    except Exception:
+        logger.debug("No debug events to copy or failed to copy debug events.")
     screenshot_format = ".png"
     try:
         device.screenshot(os.path.join(crash_path, "screenshot" + screenshot_format))
@@ -504,14 +513,14 @@ def save_crash(device):
     src_file = os.path.join(g_logs_dir, g_log_file_name)
     target_file = os.path.join(crash_path, "logs.txt")
     trim_txt(source=src_file, target=target_file)  # copy logs trimmed
-    shutil.make_archive(crash_path, "zip", crash_path)
-    shutil.rmtree(crash_path)
+    # Keep crash folder intact (do not archive) so files like hierarchy.xml remain
+    # available for live inspection and fixing UI issues.
     logger.info(
-        f"Crash saved as {crash_path}.zip",
+        f"Crash saved at {crash_path}",
         extra={"color": Fore.GREEN},
     )
     logger.info(
-        "If you want to report this crash, please upload the dump file via a ticket in the #lobby channel on discord ",
+        "If you want to report this crash, please upload the dump folder via a ticket in the #lobby channel on discord ",
         extra={"color": Fore.GREEN},
     )
     logger.info("https://discord.gg/66zWWCDM7x\n", extra={"color": Fore.GREEN})

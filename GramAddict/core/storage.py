@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from enum import Enum, unique
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 from atomicwrites import atomic_write
 
@@ -23,6 +23,7 @@ FILENAME_WHITELIST = "whitelist.txt"
 FILENAME_BLACKLIST = "blacklist.txt"
 FILENAME_COMMENTS = "comments_list.txt"
 FILENAME_MESSAGES = "pm_list.txt"
+FILENAME_UNFOLLOW_SKIPPED_RECENT = "unfollow_skipped_recent_interactions.jsonl"
 
 
 class Storage:
@@ -122,6 +123,43 @@ class Storage:
             user[USER_LAST_INTERACTION], "%Y-%m-%d %H:%M:%S.%f"
         )
         return True, last_interaction
+
+    def was_interacted_in_last_days(
+        self, username: str, days: int = 7
+    ) -> Tuple[bool, Optional[datetime]]:
+        """Return (True, last_interaction) if user was interacted with in the last `days` days, else (False, None)."""
+        was_interacted, last_interaction = self.check_user_was_interacted(username)
+        if not was_interacted or last_interaction is None:
+            return False, None
+        if datetime.now() - last_interaction < timedelta(days=days):
+            return True, last_interaction
+        return False, None
+
+    def ensure_unfollow_skipped_recent_log_exists(self) -> None:
+        """Create the unfollow skip log file if it does not exist (so it exists even when no one is skipped yet)."""
+        log_path = os.path.join(
+            self.account_path, FILENAME_UNFOLLOW_SKIPPED_RECENT
+        )
+        if not os.path.exists(log_path):
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Users skipped from unfollow because interacted with in the last N days (one JSON object per line)\n"
+                )
+
+    def log_unfollow_skipped_recent_interaction(
+        self, username: str, last_interaction: datetime
+    ) -> None:
+        """Append one entry to the unfollow skip log (user was interacted with recently)."""
+        log_path = os.path.join(
+            self.account_path, FILENAME_UNFOLLOW_SKIPPED_RECENT
+        )
+        entry = {
+            "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "username": username,
+            "last_interaction": last_interaction.strftime("%Y-%m-%d %H:%M:%S.%f"),
+        }
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     def get_following_status(self, username):
         user = self.interacted_users.get(username)

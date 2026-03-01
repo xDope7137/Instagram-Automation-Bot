@@ -18,6 +18,7 @@ from GramAddict.core.device_facade import (
     SleepTime,
     Timeout,
 )
+from GramAddict.core.debug import debug_logger
 from GramAddict.core.resources import ClassName
 from GramAddict.core.resources import ResourceID as resources
 from GramAddict.core.resources import TabBarText
@@ -30,6 +31,10 @@ from GramAddict.core.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+FOLLOWING_REGEX = r"^Following|^Requested"
+UNFOLLOW_REGEX = r"^Unfollow"
 
 
 def load_config(config):
@@ -708,6 +713,24 @@ class PostsViewList:
                 resourceIdMatches=ResourceID.ROW_FEED_TEXT,
                 textStartsWith=username,
             )
+            # If no classic feed description found, try clips/reels style:
+            if not post_description.exists():
+                try:
+                    cd_node = self.device.find(
+                        index=-1,
+                        className=ClassName.VIEW_GROUP,
+                        descriptionMatches=r".*#.*",
+                    )
+                    if cd_node.exists():
+                        logger.debug("Description found via content-desc on ViewGroup (clips/reels).")
+                        new_description = (cd_node.get_desc() or "").upper()
+                        if new_description != last_description:
+                            return False, new_description, username, is_ad, is_hashtag, has_tags
+                        logger.info("This post has the same description and author as the last one.")
+                        return True, new_description, username, is_ad, is_hashtag, has_tags
+                except Exception:
+                    # ignore and continue with standard logic
+                    pass
             if not post_description.exists() and post_description.count_items() >= 1:
                 text = post_description.get_text()
                 post_description = self.device.find(
@@ -815,24 +838,30 @@ class PostsViewList:
 
         for _ in range(3):
             if not post_owner_obj.exists():
-                if mode == Owner.OPEN:
-                    comment_description = self.device.find(
-                        resourceIdMatches=ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT,
-                        textStartsWith=username,
-                    )
-                    if (
-                        not comment_description.exists()
-                        and comment_description.count_items() >= 1
-                    ):
+                # Fallback: some media types (clips/reels) expose author username under a different id
+                if hasattr(ResourceID, "CLIPS_AUTHOR_USERNAME"):
+                    fallback_owner = self.device.find(resourceId=ResourceID.CLIPS_AUTHOR_USERNAME)
+                    if fallback_owner.exists():
+                        post_owner_obj = fallback_owner
+                if not post_owner_obj.exists():
+                    if mode == Owner.OPEN:
                         comment_description = self.device.find(
                             resourceIdMatches=ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT,
-                            text=comment_description.get_text(),
+                            textStartsWith=username,
                         )
+                        if (
+                            not comment_description.exists()
+                            and comment_description.count_items() >= 1
+                        ):
+                            comment_description = self.device.find(
+                                resourceIdMatches=ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT,
+                                text=comment_description.get_text(),
+                            )
 
-                    if comment_description.exists():
-                        logger.info("Open post owner from description.")
-                        comment_description.child().click()
-                        return True, is_ad, is_hashtag
+                        if comment_description.exists():
+                            logger.info("Open post owner from description.")
+                            comment_description.child().click()
+                            return True, is_ad, is_hashtag
                 UniversalActions(self.device)._swipe_points(direction=Direction.UP)
                 post_owner_obj = self.device.find(
                     resourceIdMatches=ResourceID.ROW_FEED_PHOTO_PROFILE_NAME,
@@ -1497,41 +1526,153 @@ class ProfileView(ActionBarView):
 
     def _getSomeText(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """Get some text from the profile to check the language"""
-        obj = self.device.find(
-            resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_CONTAINER
-        )
-        if not obj.exists(Timeout.MEDIUM):
+        # Try multiple candidate containers/ids (new Instagram UI changed the structure)
+        candidates = [
+            ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE,
+            ResourceID.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR,
+            ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_CONTAINER,
+            ResourceID.PROFILE_HEADER_METRICS_FULL_WIDTH,
+            ResourceID.PROFILE_HEADER_FIXED_LIST,
+            ResourceID.PROFILE_HEADER_CONTAINER,
+            ResourceID.ROW_PROFILE_HEADER,
+        ]
+
+        def _extract_from_container(container) -> Optional[str]:
+            # Try direct known child ids first
+            try:
+                # familiar value id
+                val = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE)
+                if val.exists(Timeout.SHORT):
+                    return val.get_text(error=False)
+            except Exception:
+                pass
+            # try to get text from index=0/1/2 children
+            for idx in (0, 1, 2, -1):
+                try:
+                    child = container.child(index=idx)
+                    if child.exists(Timeout.SHORT):
+                        txt = child.get_text(error=False)
+                        if txt:
+                            return txt
+                        desc = child.get_desc()
+                        if desc:
+                            return desc
+                except Exception:
+                    continue
+            # as last resort, probe immediate children for numeric-looking text
+            try:
+                for ch in container.child():
+                    try:
+                        txt = ch.get_text(error=False)
+                    except Exception:
+                        txt = None
+                    if txt:
+                        return txt
+                    try:
+                        desc = ch.get_desc()
+                    except Exception:
+                        desc = None
+                    if desc:
+                        return desc
+            except Exception:
+                pass
+            return None
+
+        import re as _re
+        number_like = _re.compile(r"\d")
+
+        # Ensure the page is rendered (attempt a small swipe if not)
+        base_obj = self.device.find(resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_CONTAINER)
+        if not base_obj.exists(Timeout.MEDIUM):
             UniversalActions(self.device)._swipe_points(Direction.UP)
-        try:
-            post = (
-                self.device.find(
-                    resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_CONTAINER
-                )
-                .child(index=1)
-                .get_text()
-            )
-            followers = (
-                self.device.find(
-                    resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER
-                )
-                .child(index=1)
-                .get_text()
-            )
-            following = (
-                self.device.find(
-                    resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER
-                )
-                .child(index=1)
-                .get_text()
-            )
-            return post.casefold(), followers.casefold(), following.casefold()
-        except Exception as e:
-            logger.debug(f"Exception: {e}")
-            logger.warning(
-                "Can't get post/followers/following text for check the language! Save a crash to understand the reason."
-            )
-            save_crash(self.device)
-            return None, None, None
+
+        post = followers = following = None
+        for cand in candidates:
+            try:
+                container = None
+                # If cand looks like a full resource id value (not matches), try direct find
+                if cand.startswith(self.device.app_id) or ":" in cand:
+                    container = self.device.find(resourceId=cand)
+                else:
+                    container = self.device.find(resourceIdMatches=case_insensitive_re(cand))
+            except Exception:
+                try:
+                    container = self.device.find(resourceIdMatches=case_insensitive_re(cand))
+                except Exception:
+                    container = None
+            if container is None or not container.exists(Timeout.SHORT):
+                continue
+            # Try to get the label texts (e.g., 'posts', 'followers', 'following')
+            try:
+                # posts label
+                lbl = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_LABEL)
+                if lbl.exists(Timeout.SHORT):
+                    post = lbl.get_text(error=False)
+            except Exception:
+                pass
+            if post is None:
+                # try container's child index 1 (label in familiar layout)
+                try:
+                    c = container.child(index=1)
+                    if c.exists(Timeout.SHORT):
+                        txt = c.get_text(error=False)
+                        if txt and not number_like.search(txt):
+                            post = txt
+                except Exception:
+                    pass
+
+            # followers label
+            try:
+                lbl = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWERS_LABEL)
+                if lbl.exists(Timeout.SHORT):
+                    followers = lbl.get_text(error=False)
+            except Exception:
+                pass
+            if followers is None:
+                try:
+                    # sometimes followers label is child index 1 of stacked container
+                    foll_stack = container.child(resourceId=ResourceID.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR) if hasattr(ResourceID, 'PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR') else None
+                except Exception:
+                    foll_stack = None
+                try:
+                    if foll_stack and foll_stack.exists(Timeout.SHORT):
+                        lblc = foll_stack.child(index=1)
+                        if lblc.exists(Timeout.SHORT):
+                            followers = lblc.get_text(error=False)
+                except Exception:
+                    pass
+
+            # following label
+            try:
+                lbl = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWING_LABEL)
+                if lbl.exists(Timeout.SHORT):
+                    following = lbl.get_text(error=False)
+            except Exception:
+                pass
+            if following is None:
+                try:
+                    follow_stack = container.child(resourceId=ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR) if hasattr(ResourceID, 'PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR') else None
+                except Exception:
+                    follow_stack = None
+                try:
+                    if follow_stack and follow_stack.exists(Timeout.SHORT):
+                        lblc = follow_stack.child(index=1)
+                        if lblc.exists(Timeout.SHORT):
+                            following = lblc.get_text(error=False)
+                except Exception:
+                    pass
+            if post and followers and following:
+                break
+
+        if post or followers or following:
+            return (post.casefold() if post else None, followers.casefold() if followers else None, following.casefold() if following else None)
+
+        logger.debug("Exception: failed to extract posts/followers/following from known containers")
+        logger.warning(
+            "Can't get post/followers/following text for check the language! Save a crash to understand the reason."
+        )
+        save_crash(self.device)
+        return None, None, None
 
     def _new_ui_profile_button(self) -> bool:
         found = False
@@ -1550,13 +1691,24 @@ class ProfileView(ActionBarView):
             found = True
         return found
 
-    def click_on_avatar(self):
-        while True:
+    def click_on_avatar(self, max_back_attempts: int = 15):
+        """Try to open profile tab. Press back up to max_back_attempts if profile button not found."""
+        for attempt in range(max_back_attempts):
             if self._new_ui_profile_button():
-                break
+                return
             if self._old_ui_profile_button():
-                break
-            self.device.back()
+                return
+            if attempt < max_back_attempts - 1:
+                random_sleep(1, 2, modulable=False)
+                self.device.back()
+        logger.error(
+            "Could not find profile tab after %d attempts. App layout may have changed or the app may be stuck.",
+            max_back_attempts,
+        )
+        save_crash(self.device)
+        raise RuntimeError(
+            "Could not navigate to profile tab. Try opening Instagram manually to the profile tab and run again."
+        )
 
     def getFollowButton(self):
         button_regex = f"{ClassName.BUTTON}|{ClassName.TEXT_VIEW}"
@@ -1643,6 +1795,14 @@ class ProfileView(ActionBarView):
         return int(value * multiplier)
 
     def _getFollowersTextView(self):
+        # Try newer UI id first
+        followers_text_view = self.device.find(
+            resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWERS_VALUE,
+            className=ClassName.TEXT_VIEW,
+        )
+        if followers_text_view.exists(Timeout.MEDIUM):
+            return followers_text_view
+        # legacy fallback
         followers_text_view = self.device.find(
             resourceIdMatches=case_insensitive_re(
                 ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_FOLLOWERS_COUNT
@@ -1667,6 +1827,14 @@ class ProfileView(ActionBarView):
         return followers
 
     def _getFollowingTextView(self):
+        # Try newer UI id first
+        following_text_view = self.device.find(
+            resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWING_VALUE,
+            className=ClassName.TEXT_VIEW,
+        )
+        if following_text_view.exists(Timeout.MEDIUM):
+            return following_text_view
+        # legacy fallback
         following_text_view = self.device.find(
             resourceIdMatches=case_insensitive_re(
                 ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_FOLLOWING_COUNT
@@ -1691,16 +1859,109 @@ class ProfileView(ActionBarView):
         return following
 
     def getPostsCount(self) -> int:
+        # Primary selectors for newer Instagram UI
+        # Try the newer 'familiar' styled header values first
         post_count_view = self.device.find(
-            resourceIdMatches=case_insensitive_re(
-                ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_COUNT
-            )
+            resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE,
+            className=ClassName.TEXT_VIEW,
         )
+        if not post_count_view.exists(Timeout.MEDIUM):
+            # fallback to front familiar container which may hold children
+            post_count_view = self.device.find(
+                resourceIdMatches=case_insensitive_re(ResourceID.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR)
+            )
+        # legacy fallback
+        if not post_count_view.exists(Timeout.ZERO):
+            post_count_view = self.device.find(
+                resourceIdMatches=case_insensitive_re(
+                    ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_COUNT
+                )
+            )
+        # Try direct text
         if post_count_view.exists(Timeout.MEDIUM):
-            count = post_count_view.get_text()
-            if count is not None:
-                return self._parseCounter(count)
+            try:
+                count = post_count_view.get_text(error=False)
+            except Exception:
+                count = None
+            if count:
+                parsed = self._parseCounter(count)
+                if parsed is not None:
+                    return parsed
+        # Fallback: try the posts container (used elsewhere)
+        try:
+            container = self.device.find(
+                resourceIdMatches=case_insensitive_re(
+                    ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_CONTAINER
+                )
+            )
+            if container.exists(Timeout.MEDIUM):
+                # usually index 1 contains the numeric count
+                try:
+                    count_alt = container.child(index=1).get_text(error=False)
+                except Exception:
+                    count_alt = None
+                if count_alt:
+                    parsed = self._parseCounter(count_alt)
+                    if parsed is not None:
+                        return parsed
+                # sometimes the number is presented as contentDescription
+                try:
+                    desc = container.get_desc()
+                except Exception:
+                    desc = None
+                if desc:
+                    parsed = self._parseCounter(desc)
+                    if parsed is not None:
+                        return parsed
+        except Exception as e:
+            logger.debug(f"Fallback parsing posts count failed: {e}")
         logger.error("Cannot get posts count text.")
+        # Last-resort heuristic: search nearby TextViews for numeric text (handles UI changes)
+        try:
+            # candidates: post container, profile header avatar container, action bar
+            candidates = []
+            try:
+                candidates.append(self.device.find(resourceIdMatches=case_insensitive_re(ResourceID.ROW_PROFILE_HEADER_POST_CONTAINER)))
+            except Exception:
+                pass
+            try:
+                candidates.append(self.device.find(resourceIdMatches=case_insensitive_re(ResourceID.PROFILE_HEADER_AVATAR_CONTAINER_TOP_LEFT_STUB)))
+            except Exception:
+                pass
+            try:
+                candidates.append(self.device.find(resourceIdMatches=case_insensitive_re(ResourceID.ACTION_BAR_CONTAINER)))
+            except Exception:
+                pass
+
+            import re as _re
+
+            number_re = _re.compile(r"^\s*\d[\d\.,KM]*\s*$", _re.IGNORECASE)
+            for container in candidates:
+                if container is None:
+                    continue
+                # iterate through child textviews
+                for child in container.child():
+                    try:
+                        text = child.get_text(error=False)
+                    except Exception:
+                        text = None
+                    if text and number_re.match(text):
+                        parsed = self._parseCounter(text)
+                        if parsed is not None:
+                            return parsed
+                    # try contentDescription as fallback
+                    try:
+                        desc = child.get_desc()
+                    except Exception:
+                        desc = None
+                    if desc and number_re.match(desc):
+                        parsed = self._parseCounter(desc)
+                        if parsed is not None:
+                            return parsed
+        except Exception as e:
+            logger.debug(f"Posts count heuristic failed: {e}")
+
+        save_crash(self.device)
         return 0
 
     def count_photo_in_view(self) -> Tuple[int, int]:
@@ -1812,20 +2073,58 @@ class ProfileView(ActionBarView):
 
     def navigateToFollowing(self):
         logger.info("Navigate to following.")
-        following_button = self.device.find(
-            resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER
-        )
-        if following_button.exists(Timeout.LONG):
-            following_button.click_retry()
-            following_tab = self.device.find(
-                resourceIdMatches=ResourceID.UNIFIED_FOLLOW_LIST_TAB_LAYOUT
-            ).child(textContains="Following")
-            if following_tab.exists(Timeout.LONG):
-                if not following_tab.get_property("selected"):
-                    following_tab.click()
-                return True
-        else:
+        # Try multiple selectors to handle UI variations
+        tried = []
+        # Primary legacy container
+        tried.append(("legacy_following_container", ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER))
+        # New familiar stacked container
+        tried.append(("familiar_following_stacked", ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR))
+        # Full-width metrics container (may be clickable)
+        tried.append(("metrics_full_width", ResourceID.PROFILE_HEADER_METRICS_FULL_WIDTH))
+        # Generic row header
+        tried.append(("row_profile_header", ResourceID.ROW_PROFILE_HEADER))
+
+        clicked = False
+        for name, selector in tried:
+            try:
+                # selector may be a single id or a pipe-separated match string
+                if "|" in selector or selector.startswith("(?i)") or selector.startswith(self.device.app_id):
+                    obj = self.device.find(resourceIdMatches=selector)
+                else:
+                    # direct id
+                    obj = self.device.find(resourceId=selector)
+            except Exception:
+                # fallback to matches
+                obj = self.device.find(resourceIdMatches=selector)
+
+            if obj.exists(Timeout.SHORT):
+                logger.debug(f"Found following opener by '{name}'. Clicking.")
+                # Prefer click_retry when available
+                try:
+                    obj.click_retry()
+                except Exception:
+                    try:
+                        obj.click()
+                    except Exception:
+                        logger.debug(f"Failed to click following opener '{name}'.")
+                        continue
+                clicked = True
+                break
+
+        if not clicked:
             logger.error("Can't find following tab!")
+            return False
+
+        # After clicking, wait for the following tab container to appear and select the 'Following' tab
+        following_tab = self.device.find(
+            resourceIdMatches=ResourceID.UNIFIED_FOLLOW_LIST_TAB_LAYOUT
+        ).child(textContains="Following")
+        if following_tab.exists(Timeout.LONG):
+            if not following_tab.get_property("selected"):
+                following_tab.click()
+            return True
+        else:
+            logger.error("Following tab did not appear after clicking opener.")
             return False
 
     def navigateToMutual(self):
@@ -1946,24 +2245,107 @@ class FollowingView:
             logger.error(f"Cannot find {username} in following list.")
             return False
         if following_button.exists(Timeout.SHORT):
-            following_button.click()
-            UNFOLLOW_REGEX = "^Unfollow$"
-            confirm_unfollow_button = self.device.find(
-                resourceId=ResourceID.PRIMARY_BUTTON, textMatches=UNFOLLOW_REGEX
+            # Dump UI and log selector before opening profile so we can inspect why wrong area is clicked
+            try:
+                extra = {"username": username}
+                try:
+                    extra["user_row_bounds"] = user_row.get_bounds()
+                except Exception:
+                    extra["user_row_bounds"] = None
+                try:
+                    extra["following_button_bounds"] = following_button.get_bounds()
+                except Exception:
+                    extra["following_button_bounds"] = None
+                debug_logger.save_dump(self.device, reason="before_do_unfollow_from_list_open_profile", extra=extra)
+                debug_logger.log_selector_attempt({"resourceId": ResourceID.FOLLOW_LIST_CONTAINER, "child_index": 1}, "do_unfollow_from_list", result=True)
+            except Exception:
+                logger.debug("Failed to write debug dump before opening profile.")
+
+            # Click on the username to open the profile
+            username_view = None
+            try:
+                username_view = user_row.child(resourceId=ResourceID.FOLLOW_LIST_USERNAME)
+            except Exception:
+                try:
+                    username_view = user_row.child(index=1).child().child()
+                except Exception:
+                    username_view = None
+            if username_view and username_view.exists(Timeout.SHORT):
+                username_view.click_retry()
+            else:
+                logger.error(f"Cannot click username for @{username}.")
+                return False
+
+            # Now on profile, try to find the Following button and confirm unfollow
+            unfollow_button = self.device.find(
+                classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+                clickable=True,
+                textMatches=FOLLOWING_REGEX,
             )
-            if confirm_unfollow_button.exists(Timeout.SHORT):
+            attempts = 2
+            for _ in range(attempts):
+                if unfollow_button.exists():
+                    break
+                scrollable = self.device.find(classNameMatches=ClassName.VIEW_PAGER)
+                if scrollable.exists():
+                    scrollable.scroll(Direction.UP)
+                unfollow_button = self.device.find(
+                    classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+                    clickable=True,
+                    textMatches=FOLLOWING_REGEX,
+                )
+            if not unfollow_button.exists():
+                logger.error("Cannot find Following button on profile.")
+                save_crash(self.device)
+                # try go back
+                self.device.back()
+                return False
+            logger.debug("Unfollow button click (from profile).")
+            unfollow_button.click()
+
+            # Confirm unfollow: try several fallback selectors
+            confirm_unfollow_button = None
+            try:
+                confirm_unfollow_button = self.device.find(
+                    resourceId=ResourceID.FOLLOW_SHEET_UNFOLLOW_ROW
+                )
+            except Exception:
+                confirm_unfollow_button = None
+
+            if not confirm_unfollow_button or not confirm_unfollow_button.exists(Timeout.SHORT):
+                # Try any button/text matching 'Unfollow'
+                confirm_unfollow_button = self.device.find(
+                    classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+                    textMatches=UNFOLLOW_REGEX,
+                    clickable=True,
+                )
+            if not confirm_unfollow_button or not confirm_unfollow_button.exists(Timeout.SHORT):
+                # Try primary button with Unfollow text
+                confirm_unfollow_button = self.device.find(
+                    resourceId=ResourceID.PRIMARY_BUTTON, textMatches=UNFOLLOW_REGEX
+                )
+
+            if confirm_unfollow_button and confirm_unfollow_button.exists(Timeout.SHORT):
                 random_sleep(1, 2)
                 confirm_unfollow_button.click()
             UniversalActions.detect_block(self.device)
-            FOLLOW_REGEX = "^Follow$"
-            follow_button = user_row.child(index=2, textMatches=FOLLOW_REGEX)
-            if follow_button.exists(Timeout.SHORT):
+
+            # Verify unfollow by checking the follow button status on profile.
+            # After unfollowing, the profile button may show "Follow" or "Follow back".
+            FOLLOW_REGEX = case_insensitive_re(["Follow", "Follow back"])
+            follow_button = self.device.find(
+                classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX, textMatches=FOLLOW_REGEX
+            )
+            unfollowed_ok = follow_button.exists(Timeout.SHORT)
+            # Go back to followings list
+            self.device.back()
+            if unfollowed_ok:
                 logger.info(
                     f"{username} unfollowed.",
                     extra={"color": f"{Style.BRIGHT}{Fore.GREEN}"},
                 )
                 return True
-            if not confirm_unfollow_button.exists(Timeout.SHORT):
+            else:
                 logger.error(f"Cannot confirm unfollow for {username}.")
                 save_crash(self.device)
                 return False

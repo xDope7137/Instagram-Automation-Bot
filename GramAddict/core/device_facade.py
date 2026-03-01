@@ -13,6 +13,7 @@ from typing import Optional
 import uiautomator2
 
 from GramAddict.core.utils import random_sleep
+from GramAddict.core.debug import debug_logger
 
 logger = logging.getLogger(__name__)
 
@@ -121,11 +122,23 @@ class DeviceFacade:
     ):
         try:
             view = self.deviceV2(**kwargs)
-            if index is not None and view.count > 1:
+            if index is not None and getattr(view, "count", 0) > 1:
                 view = self.deviceV2(**kwargs)[index]
         except uiautomator2.JSONRPCError as e:
             raise DeviceFacade.JsonRpcError(e)
-        return DeviceFacade.View(view=view, device=self.deviceV2)
+        wrapped = DeviceFacade.View(view=view, device=self.deviceV2)
+        try:
+            exists = wrapped.exists(ignore_bug=True)
+        except Exception:
+            exists = False
+        # caller function for context
+        caller = stack()[1].function
+        try:
+            debug_logger.log_selector_attempt(kwargs, caller, result=exists)
+        except Exception:
+            # never fail the find due to debugging instrumentation
+            pass
+        return wrapped
 
     def back(self, modulable: bool = True):
         logger.debug("Press back button.")
@@ -474,14 +487,31 @@ class DeviceFacade:
                 logger.debug(
                     f"Single click in ({x_abs},{y_abs}). Surface: ({visible_bounds['left']}-{visible_bounds['right']},{visible_bounds['top']}-{visible_bounds['bottom']})"
                 )
+                # record before-action fingerprint
+                try:
+                    caller = stack()[1].function
+                    before_fp = debug_logger.record_before_action(self.deviceV2, tag=caller)
+                except Exception:
+                    before_fp = ""
                 self.viewV2.click(
                     self.get_ui_timeout(Timeout.LONG),
                     offset=(x_offset, y_offset),
                 )
                 DeviceFacade.sleep_mode(sleep)
+                # record after-action and potentially dump artifacts if structural drift
+                try:
+                    debug_logger.record_after_action(self.deviceV2, before_fp, tag=caller, ctx={"bounds": visible_bounds})
+                except Exception:
+                    pass
 
             except uiautomator2.JSONRPCError as e:
                 if crash_report_if_fails:
+                    # save dump on low-level click error
+                    try:
+                        caller = stack()[1].function
+                        debug_logger.save_dump(self.deviceV2, reason="click_jsonrpc_error", extra={"caller": caller})
+                    except Exception:
+                        pass
                     raise DeviceFacade.JsonRpcError(e)
                 else:
                     logger.debug("Trying to press on a obj which is gone.")
@@ -503,6 +533,12 @@ class DeviceFacade:
             if not self.exists():
                 return True
             logger.warning("Failed to open the UI element!")
+            # Save a dump for later inspection when retrying failed
+            try:
+                caller = stack()[1].function
+                debug_logger.save_dump(self.deviceV2, reason="click_retry_failed", extra={"caller": caller, "text": self.get_text(error=False)})
+            except Exception:
+                pass
             return False
 
         def double_click(self, padding=0.3, obj_over=0):
@@ -612,13 +648,23 @@ class DeviceFacade:
                     return obj1.info["bounds"]["top"] < obj2.info["bounds"]["top"]
                 else:
                     return None
-            except uiautomator2.JSONRPCError as e:
+            except Exception as e:
+                # Wrap any exception into JsonRpcError for consistent handling
                 raise DeviceFacade.JsonRpcError(e)
 
         def get_bounds(self) -> dict:
             try:
-                return self.viewV2.info["bounds"]
-            except uiautomator2.JSONRPCError as e:
+                # If view doesn't exist return a safe empty bounds
+                if not hasattr(self, "viewV2") or not self.viewV2.exists():
+                    return {"left": 0, "top": 0, "right": 0, "bottom": 0}
+                info = self.viewV2.info
+                # info may not be a dict or may not contain bounds in some cases
+                if isinstance(info, dict) and "bounds" in info:
+                    return info["bounds"]
+                # Fallback: try to coerce common alternatives or return zero bounds
+                return {"left": 0, "top": 0, "right": 0, "bottom": 0}
+            except Exception as e:
+                # Normalize all exceptions to DeviceFacade.JsonRpcError so callers can handle them uniformly
                 raise DeviceFacade.JsonRpcError(e)
 
         def get_height(self) -> int:
