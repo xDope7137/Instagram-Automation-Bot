@@ -11,9 +11,7 @@ from GramAddict.core.views import (
     PostsGridView,
     ProfileView,
     TabBarView,
-    UniversalActions,
 )
-from GramAddict.core.debug import debug_logger
 
 logger = logging.getLogger(__name__)
 
