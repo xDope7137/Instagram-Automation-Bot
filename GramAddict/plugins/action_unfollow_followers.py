@@ -353,8 +353,10 @@ class ActionUnfollowFollowers(Plugin):
                         )
                     if skip_recent_days is None:
                         skip_recent_days = 7
-                    skipped_recent, last_interaction = storage.was_interacted_in_last_days(
-                        username, days=skip_recent_days
+                    skipped_recent, last_interaction = (
+                        storage.was_interacted_in_last_days(
+                            username, days=skip_recent_days
+                        )
                     )
                     if skipped_recent:
                         logger.info(

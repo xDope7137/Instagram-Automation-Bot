@@ -490,7 +490,9 @@ class DeviceFacade:
                 # record before-action fingerprint
                 try:
                     caller = stack()[1].function
-                    before_fp = debug_logger.record_before_action(self.deviceV2, tag=caller)
+                    before_fp = debug_logger.record_before_action(
+                        self.deviceV2, tag=caller
+                    )
                 except Exception:
                     before_fp = ""
                 self.viewV2.click(
@@ -500,7 +502,12 @@ class DeviceFacade:
                 DeviceFacade.sleep_mode(sleep)
                 # record after-action and potentially dump artifacts if structural drift
                 try:
-                    debug_logger.record_after_action(self.deviceV2, before_fp, tag=caller, ctx={"bounds": visible_bounds})
+                    debug_logger.record_after_action(
+                        self.deviceV2,
+                        before_fp,
+                        tag=caller,
+                        ctx={"bounds": visible_bounds},
+                    )
                 except Exception:
                     pass
 
@@ -509,7 +516,11 @@ class DeviceFacade:
                     # save dump on low-level click error
                     try:
                         caller = stack()[1].function
-                        debug_logger.save_dump(self.deviceV2, reason="click_jsonrpc_error", extra={"caller": caller})
+                        debug_logger.save_dump(
+                            self.deviceV2,
+                            reason="click_jsonrpc_error",
+                            extra={"caller": caller},
+                        )
                     except Exception:
                         pass
                     raise DeviceFacade.JsonRpcError(e)
@@ -536,7 +547,11 @@ class DeviceFacade:
             # Save a dump for later inspection when retrying failed
             try:
                 caller = stack()[1].function
-                debug_logger.save_dump(self.deviceV2, reason="click_retry_failed", extra={"caller": caller, "text": self.get_text(error=False)})
+                debug_logger.save_dump(
+                    self.deviceV2,
+                    reason="click_retry_failed",
+                    extra={"caller": caller, "text": self.get_text(error=False)},
+                )
             except Exception:
                 pass
             return False

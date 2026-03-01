@@ -96,17 +96,37 @@ class ResourceID:
         self.PROFILE_HEADER_CONTAINER = f"{APP_ID}:id/profile_header_container"
         self.PROFILE_HEADER_FIXED_LIST = f"{APP_ID}:id/profile_header_fixed_list"
         self.ROW_PROFILE_HEADER = f"{APP_ID}:id/row_profile_header"
-        self.PROFILE_HEADER_METRICS_FULL_WIDTH = f"{APP_ID}:id/profile_header_metrics_full_width"
-        self.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR = f"{APP_ID}:id/profile_header_post_count_front_familiar"
-        self.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE = f"{APP_ID}:id/profile_header_familiar_post_count_value"
-        self.PROFILE_HEADER_FAMILIAR_POST_COUNT_LABEL = f"{APP_ID}:id/profile_header_familiar_post_count_label"
-        self.PROFILE_HEADER_FAMILIAR_FOLLOWERS_VALUE = f"{APP_ID}:id/profile_header_familiar_followers_value"
-        self.PROFILE_HEADER_FAMILIAR_FOLLOWERS_LABEL = f"{APP_ID}:id/profile_header_familiar_followers_label"
-        self.PROFILE_HEADER_FAMILIAR_FOLLOWING_VALUE = f"{APP_ID}:id/profile_header_familiar_following_value"
-        self.PROFILE_HEADER_FAMILIAR_FOLLOWING_LABEL = f"{APP_ID}:id/profile_header_familiar_following_label"
+        self.PROFILE_HEADER_METRICS_FULL_WIDTH = (
+            f"{APP_ID}:id/profile_header_metrics_full_width"
+        )
+        self.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR = (
+            f"{APP_ID}:id/profile_header_post_count_front_familiar"
+        )
+        self.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE = (
+            f"{APP_ID}:id/profile_header_familiar_post_count_value"
+        )
+        self.PROFILE_HEADER_FAMILIAR_POST_COUNT_LABEL = (
+            f"{APP_ID}:id/profile_header_familiar_post_count_label"
+        )
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWERS_VALUE = (
+            f"{APP_ID}:id/profile_header_familiar_followers_value"
+        )
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWERS_LABEL = (
+            f"{APP_ID}:id/profile_header_familiar_followers_label"
+        )
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWING_VALUE = (
+            f"{APP_ID}:id/profile_header_familiar_following_value"
+        )
+        self.PROFILE_HEADER_FAMILIAR_FOLLOWING_LABEL = (
+            f"{APP_ID}:id/profile_header_familiar_following_label"
+        )
         # stacked container ids (used as fallback)
-        self.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR = f"{APP_ID}:id/profile_header_followers_stacked_familiar"
-        self.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR = f"{APP_ID}:id/profile_header_following_stacked_familiar"
+        self.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR = (
+            f"{APP_ID}:id/profile_header_followers_stacked_familiar"
+        )
+        self.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR = (
+            f"{APP_ID}:id/profile_header_following_stacked_familiar"
+        )
         self.PROFILE_TAB_LAYOUT = f"{APP_ID}:id/profile_tab_layout"
         self.PROFILE_TAB_ICON_VIEW = f"{APP_ID}:id/profile_tab_icon_view"
         self.PROFILE_TABS_CONTAINER = f"{APP_ID}:id/profile_tabs_container"

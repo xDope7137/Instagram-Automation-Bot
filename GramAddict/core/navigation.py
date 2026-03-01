@@ -27,15 +27,23 @@ def check_if_english(device):
     except Exception:
         app_lang = None
     if app_lang:
-        logger.info(f"App language forced by config: {app_lang}. Skipping English check.")
+        logger.info(
+            f"App language forced by config: {app_lang}. Skipping English check."
+        )
         return ProfileView(device, is_own_profile=True)
     # Fast-path: try to read familiar header labels directly (very quick)
     try:
         # First, try container content-descs which are often present and very fast
         try:
-            post_ctn = device.find(resourceId=ResourceID.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR)
-            foll_ctn = device.find(resourceId=ResourceID.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR)
-            follow_ctn = device.find(resourceId=ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR)
+            post_ctn = device.find(
+                resourceId=ResourceID.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR
+            )
+            foll_ctn = device.find(
+                resourceId=ResourceID.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR
+            )
+            follow_ctn = device.find(
+                resourceId=ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR
+            )
             if post_ctn.exists(Timeout.TINY):
                 desc = post_ctn.get_desc() or ""
                 if "post" in desc.casefold():
@@ -46,7 +54,9 @@ def check_if_english(device):
                 d1 = foll_ctn.get_desc() or ""
                 d2 = follow_ctn.get_desc() or ""
                 if "follower" in d1.casefold() and "follow" in d2.casefold():
-                    logger.debug("Instagram in English (fast-path via content-desc stacked).")
+                    logger.debug(
+                        "Instagram in English (fast-path via content-desc stacked)."
+                    )
                     return ProfileView(device, is_own_profile=True)
         except Exception:
             # continue to label-based checks
@@ -124,7 +134,7 @@ def nav_to_hashtag_or_place(device, target, current_job):
     search_view = TabBarView(device).navigateToSearch()
     if not search_view.navigate_to_target(target, current_job):
         return False
-    
+
     TargetView = HashTagView if current_job.startswith("hashtag") else PlacesView
 
     # if current_job.endswith("recent"):

@@ -722,12 +722,30 @@ class PostsViewList:
                         descriptionMatches=r".*#.*",
                     )
                     if cd_node.exists():
-                        logger.debug("Description found via content-desc on ViewGroup (clips/reels).")
+                        logger.debug(
+                            "Description found via content-desc on ViewGroup (clips/reels)."
+                        )
                         new_description = (cd_node.get_desc() or "").upper()
                         if new_description != last_description:
-                            return False, new_description, username, is_ad, is_hashtag, has_tags
-                        logger.info("This post has the same description and author as the last one.")
-                        return True, new_description, username, is_ad, is_hashtag, has_tags
+                            return (
+                                False,
+                                new_description,
+                                username,
+                                is_ad,
+                                is_hashtag,
+                                has_tags,
+                            )
+                        logger.info(
+                            "This post has the same description and author as the last one."
+                        )
+                        return (
+                            True,
+                            new_description,
+                            username,
+                            is_ad,
+                            is_hashtag,
+                            has_tags,
+                        )
                 except Exception:
                     # ignore and continue with standard logic
                     pass
@@ -840,7 +858,9 @@ class PostsViewList:
             if not post_owner_obj.exists():
                 # Fallback: some media types (clips/reels) expose author username under a different id
                 if hasattr(ResourceID, "CLIPS_AUTHOR_USERNAME"):
-                    fallback_owner = self.device.find(resourceId=ResourceID.CLIPS_AUTHOR_USERNAME)
+                    fallback_owner = self.device.find(
+                        resourceId=ResourceID.CLIPS_AUTHOR_USERNAME
+                    )
                     if fallback_owner.exists():
                         post_owner_obj = fallback_owner
                 if not post_owner_obj.exists():
@@ -1541,7 +1561,9 @@ class ProfileView(ActionBarView):
             # Try direct known child ids first
             try:
                 # familiar value id
-                val = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE)
+                val = container.child(
+                    resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_VALUE
+                )
                 if val.exists(Timeout.SHORT):
                     return val.get_text(error=False)
             except Exception:
@@ -1579,10 +1601,13 @@ class ProfileView(ActionBarView):
             return None
 
         import re as _re
+
         number_like = _re.compile(r"\d")
 
         # Ensure the page is rendered (attempt a small swipe if not)
-        base_obj = self.device.find(resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_CONTAINER)
+        base_obj = self.device.find(
+            resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_CONTAINER
+        )
         if not base_obj.exists(Timeout.MEDIUM):
             UniversalActions(self.device)._swipe_points(Direction.UP)
 
@@ -1594,10 +1619,14 @@ class ProfileView(ActionBarView):
                 if cand.startswith(self.device.app_id) or ":" in cand:
                     container = self.device.find(resourceId=cand)
                 else:
-                    container = self.device.find(resourceIdMatches=case_insensitive_re(cand))
+                    container = self.device.find(
+                        resourceIdMatches=case_insensitive_re(cand)
+                    )
             except Exception:
                 try:
-                    container = self.device.find(resourceIdMatches=case_insensitive_re(cand))
+                    container = self.device.find(
+                        resourceIdMatches=case_insensitive_re(cand)
+                    )
                 except Exception:
                     container = None
             if container is None or not container.exists(Timeout.SHORT):
@@ -1605,7 +1634,9 @@ class ProfileView(ActionBarView):
             # Try to get the label texts (e.g., 'posts', 'followers', 'following')
             try:
                 # posts label
-                lbl = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_LABEL)
+                lbl = container.child(
+                    resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_POST_COUNT_LABEL
+                )
                 if lbl.exists(Timeout.SHORT):
                     post = lbl.get_text(error=False)
             except Exception:
@@ -1623,7 +1654,9 @@ class ProfileView(ActionBarView):
 
             # followers label
             try:
-                lbl = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWERS_LABEL)
+                lbl = container.child(
+                    resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWERS_LABEL
+                )
                 if lbl.exists(Timeout.SHORT):
                     followers = lbl.get_text(error=False)
             except Exception:
@@ -1631,7 +1664,15 @@ class ProfileView(ActionBarView):
             if followers is None:
                 try:
                     # sometimes followers label is child index 1 of stacked container
-                    foll_stack = container.child(resourceId=ResourceID.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR) if hasattr(ResourceID, 'PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR') else None
+                    foll_stack = (
+                        container.child(
+                            resourceId=ResourceID.PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR
+                        )
+                        if hasattr(
+                            ResourceID, "PROFILE_HEADER_FOLLOWERS_STACKED_FAMILIAR"
+                        )
+                        else None
+                    )
                 except Exception:
                     foll_stack = None
                 try:
@@ -1644,14 +1685,24 @@ class ProfileView(ActionBarView):
 
             # following label
             try:
-                lbl = container.child(resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWING_LABEL)
+                lbl = container.child(
+                    resourceId=ResourceID.PROFILE_HEADER_FAMILIAR_FOLLOWING_LABEL
+                )
                 if lbl.exists(Timeout.SHORT):
                     following = lbl.get_text(error=False)
             except Exception:
                 pass
             if following is None:
                 try:
-                    follow_stack = container.child(resourceId=ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR) if hasattr(ResourceID, 'PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR') else None
+                    follow_stack = (
+                        container.child(
+                            resourceId=ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR
+                        )
+                        if hasattr(
+                            ResourceID, "PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR"
+                        )
+                        else None
+                    )
                 except Exception:
                     follow_stack = None
                 try:
@@ -1665,9 +1716,15 @@ class ProfileView(ActionBarView):
                 break
 
         if post or followers or following:
-            return (post.casefold() if post else None, followers.casefold() if followers else None, following.casefold() if following else None)
+            return (
+                post.casefold() if post else None,
+                followers.casefold() if followers else None,
+                following.casefold() if following else None,
+            )
 
-        logger.debug("Exception: failed to extract posts/followers/following from known containers")
+        logger.debug(
+            "Exception: failed to extract posts/followers/following from known containers"
+        )
         logger.warning(
             "Can't get post/followers/following text for check the language! Save a crash to understand the reason."
         )
@@ -1868,7 +1925,9 @@ class ProfileView(ActionBarView):
         if not post_count_view.exists(Timeout.MEDIUM):
             # fallback to front familiar container which may hold children
             post_count_view = self.device.find(
-                resourceIdMatches=case_insensitive_re(ResourceID.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR)
+                resourceIdMatches=case_insensitive_re(
+                    ResourceID.PROFILE_HEADER_POST_COUNT_FRONT_FAMILIAR
+                )
             )
         # legacy fallback
         if not post_count_view.exists(Timeout.ZERO):
@@ -1921,15 +1980,33 @@ class ProfileView(ActionBarView):
             # candidates: post container, profile header avatar container, action bar
             candidates = []
             try:
-                candidates.append(self.device.find(resourceIdMatches=case_insensitive_re(ResourceID.ROW_PROFILE_HEADER_POST_CONTAINER)))
+                candidates.append(
+                    self.device.find(
+                        resourceIdMatches=case_insensitive_re(
+                            ResourceID.ROW_PROFILE_HEADER_POST_CONTAINER
+                        )
+                    )
+                )
             except Exception:
                 pass
             try:
-                candidates.append(self.device.find(resourceIdMatches=case_insensitive_re(ResourceID.PROFILE_HEADER_AVATAR_CONTAINER_TOP_LEFT_STUB)))
+                candidates.append(
+                    self.device.find(
+                        resourceIdMatches=case_insensitive_re(
+                            ResourceID.PROFILE_HEADER_AVATAR_CONTAINER_TOP_LEFT_STUB
+                        )
+                    )
+                )
             except Exception:
                 pass
             try:
-                candidates.append(self.device.find(resourceIdMatches=case_insensitive_re(ResourceID.ACTION_BAR_CONTAINER)))
+                candidates.append(
+                    self.device.find(
+                        resourceIdMatches=case_insensitive_re(
+                            ResourceID.ACTION_BAR_CONTAINER
+                        )
+                    )
+                )
             except Exception:
                 pass
 
@@ -2076,11 +2153,23 @@ class ProfileView(ActionBarView):
         # Try multiple selectors to handle UI variations
         tried = []
         # Primary legacy container
-        tried.append(("legacy_following_container", ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER))
+        tried.append(
+            (
+                "legacy_following_container",
+                ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER,
+            )
+        )
         # New familiar stacked container
-        tried.append(("familiar_following_stacked", ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR))
+        tried.append(
+            (
+                "familiar_following_stacked",
+                ResourceID.PROFILE_HEADER_FOLLOWING_STACKED_FAMILIAR,
+            )
+        )
         # Full-width metrics container (may be clickable)
-        tried.append(("metrics_full_width", ResourceID.PROFILE_HEADER_METRICS_FULL_WIDTH))
+        tried.append(
+            ("metrics_full_width", ResourceID.PROFILE_HEADER_METRICS_FULL_WIDTH)
+        )
         # Generic row header
         tried.append(("row_profile_header", ResourceID.ROW_PROFILE_HEADER))
 
@@ -2088,7 +2177,11 @@ class ProfileView(ActionBarView):
         for name, selector in tried:
             try:
                 # selector may be a single id or a pipe-separated match string
-                if "|" in selector or selector.startswith("(?i)") or selector.startswith(self.device.app_id):
+                if (
+                    "|" in selector
+                    or selector.startswith("(?i)")
+                    or selector.startswith(self.device.app_id)
+                ):
                     obj = self.device.find(resourceIdMatches=selector)
                 else:
                     # direct id
@@ -2256,15 +2349,25 @@ class FollowingView:
                     extra["following_button_bounds"] = following_button.get_bounds()
                 except Exception:
                     extra["following_button_bounds"] = None
-                debug_logger.save_dump(self.device, reason="before_do_unfollow_from_list_open_profile", extra=extra)
-                debug_logger.log_selector_attempt({"resourceId": ResourceID.FOLLOW_LIST_CONTAINER, "child_index": 1}, "do_unfollow_from_list", result=True)
+                debug_logger.save_dump(
+                    self.device,
+                    reason="before_do_unfollow_from_list_open_profile",
+                    extra=extra,
+                )
+                debug_logger.log_selector_attempt(
+                    {"resourceId": ResourceID.FOLLOW_LIST_CONTAINER, "child_index": 1},
+                    "do_unfollow_from_list",
+                    result=True,
+                )
             except Exception:
                 logger.debug("Failed to write debug dump before opening profile.")
 
             # Click on the username to open the profile
             username_view = None
             try:
-                username_view = user_row.child(resourceId=ResourceID.FOLLOW_LIST_USERNAME)
+                username_view = user_row.child(
+                    resourceId=ResourceID.FOLLOW_LIST_USERNAME
+                )
             except Exception:
                 try:
                     username_view = user_row.child(index=1).child().child()
@@ -2312,20 +2415,26 @@ class FollowingView:
             except Exception:
                 confirm_unfollow_button = None
 
-            if not confirm_unfollow_button or not confirm_unfollow_button.exists(Timeout.SHORT):
+            if not confirm_unfollow_button or not confirm_unfollow_button.exists(
+                Timeout.SHORT
+            ):
                 # Try any button/text matching 'Unfollow'
                 confirm_unfollow_button = self.device.find(
                     classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
                     textMatches=UNFOLLOW_REGEX,
                     clickable=True,
                 )
-            if not confirm_unfollow_button or not confirm_unfollow_button.exists(Timeout.SHORT):
+            if not confirm_unfollow_button or not confirm_unfollow_button.exists(
+                Timeout.SHORT
+            ):
                 # Try primary button with Unfollow text
                 confirm_unfollow_button = self.device.find(
                     resourceId=ResourceID.PRIMARY_BUTTON, textMatches=UNFOLLOW_REGEX
                 )
 
-            if confirm_unfollow_button and confirm_unfollow_button.exists(Timeout.SHORT):
+            if confirm_unfollow_button and confirm_unfollow_button.exists(
+                Timeout.SHORT
+            ):
                 random_sleep(1, 2)
                 confirm_unfollow_button.click()
             UniversalActions.detect_block(self.device)
@@ -2334,7 +2443,8 @@ class FollowingView:
             # After unfollowing, the profile button may show "Follow" or "Follow back".
             FOLLOW_REGEX = case_insensitive_re(["Follow", "Follow back"])
             follow_button = self.device.find(
-                classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX, textMatches=FOLLOW_REGEX
+                classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+                textMatches=FOLLOW_REGEX,
             )
             unfollowed_ok = follow_button.exists(Timeout.SHORT)
             # Go back to followings list

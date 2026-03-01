@@ -113,7 +113,11 @@ class Config:
         self.parser.add_argument(
             "--app_language",
             required=False,
-            help=argparse.SUPPRESS if 'argparse' in globals() else "Alias for --app-language",
+            help=(
+                argparse.SUPPRESS
+                if "argparse" in globals()
+                else "Alias for --app-language"
+            ),
         )
 
         # on first run, we must wait to proceed with loading

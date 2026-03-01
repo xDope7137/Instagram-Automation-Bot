@@ -137,9 +137,7 @@ class Storage:
 
     def ensure_unfollow_skipped_recent_log_exists(self) -> None:
         """Create the unfollow skip log file if it does not exist (so it exists even when no one is skipped yet)."""
-        log_path = os.path.join(
-            self.account_path, FILENAME_UNFOLLOW_SKIPPED_RECENT
-        )
+        log_path = os.path.join(self.account_path, FILENAME_UNFOLLOW_SKIPPED_RECENT)
         if not os.path.exists(log_path):
             with open(log_path, "w", encoding="utf-8") as f:
                 f.write(
@@ -150,9 +148,7 @@ class Storage:
         self, username: str, last_interaction: datetime
     ) -> None:
         """Append one entry to the unfollow skip log (user was interacted with recently)."""
-        log_path = os.path.join(
-            self.account_path, FILENAME_UNFOLLOW_SKIPPED_RECENT
-        )
+        log_path = os.path.join(self.account_path, FILENAME_UNFOLLOW_SKIPPED_RECENT)
         entry = {
             "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "username": username,
